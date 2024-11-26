@@ -62,10 +62,10 @@ class semaphore
 {
 	SEMAPHORE sem;
 public:
-	semaphore() { semaphore_init(&sem); }
-	~semaphore() { semaphore_destroy(&sem); }
-	void wait() { semaphore_wait(&sem); }
-	void signal() { semaphore_signal(&sem); }
+	semaphore() { teesemaphore_init(&sem); }
+	~semaphore() { teesemaphore_destroy(&sem); }
+	void wait() { teesemaphore_wait(&sem); }
+	void signal() { teesemaphore_signal(&sem); }
 };
 
 class lock

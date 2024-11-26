@@ -353,7 +353,7 @@ void thread_sleep(int milliseconds);
 		user - Pointer to pass to the thread.
 
 */
-void *thread_create(void (*threadfunc)(void *), void *user);
+void *teethread_create(void (*threadfunc)(void *), void *user);
 
 /*
 	Function: thread_wait
@@ -412,10 +412,10 @@ void lock_release(LOCK lock);
 	#error missing sempahore implementation
 #endif
 
-void semaphore_init(SEMAPHORE *sem);
-void semaphore_wait(SEMAPHORE *sem);
-void semaphore_signal(SEMAPHORE *sem);
-void semaphore_destroy(SEMAPHORE *sem);
+void teesemaphore_init(SEMAPHORE *sem);
+void teesemaphore_wait(SEMAPHORE *sem);
+void teesemaphore_signal(SEMAPHORE *sem);
+void teesemaphore_destroy(SEMAPHORE *sem);
 
 /* Group: Timer */
 #ifdef __GNUC__

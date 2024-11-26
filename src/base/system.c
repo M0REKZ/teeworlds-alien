@@ -368,7 +368,7 @@ int io_flush(IOHANDLE io)
 	return 0;
 }
 
-void *thread_create(void (*threadfunc)(void *), void *u)
+void *teethread_create(void (*threadfunc)(void *), void *u)
 {
 #if defined(CONF_FAMILY_UNIX)
 	pthread_t id;
@@ -506,15 +506,15 @@ void lock_release(LOCK lock)
 }
 
 #if defined(CONF_FAMILY_UNIX)
-void semaphore_init(SEMAPHORE *sem) { sem_init(sem, 0, 0); }
-void semaphore_wait(SEMAPHORE *sem) { sem_wait(sem); }
-void semaphore_signal(SEMAPHORE *sem) { sem_post(sem); }
-void semaphore_destroy(SEMAPHORE *sem) { sem_destroy(sem); }
+void teesemaphore_init(SEMAPHORE *sem) { sem_init(sem, 0, 0); }
+void teesemaphore_wait(SEMAPHORE *sem) { sem_wait(sem); }
+void teesemaphore_signal(SEMAPHORE *sem) { sem_post(sem); }
+void teesemaphore_destroy(SEMAPHORE *sem) { sem_destroy(sem); }
 #elif defined(CONF_FAMILY_WINDOWS)
-void semaphore_init(SEMAPHORE *sem) { *sem = CreateSemaphore(0, 0, 10000, 0); }
-void semaphore_wait(SEMAPHORE *sem) { WaitForSingleObject((HANDLE)*sem, 0L); }
-void semaphore_signal(SEMAPHORE *sem) { ReleaseSemaphore((HANDLE)*sem, 1, NULL); }
-void semaphore_destroy(SEMAPHORE *sem) { CloseHandle((HANDLE)*sem); }
+void teesemaphore_init(SEMAPHORE *sem) { *sem = CreateSemaphore(0, 0, 10000, 0); }
+void teesemaphore_wait(SEMAPHORE *sem) { WaitForSingleObject((HANDLE)*sem, 0L); }
+void teesemaphore_signal(SEMAPHORE *sem) { ReleaseSemaphore((HANDLE)*sem, 1, NULL); }
+void teesemaphore_destroy(SEMAPHORE *sem) { CloseHandle((HANDLE)*sem); }
 #else
 	#error not implemented on this platform
 #endif
@@ -1780,13 +1780,13 @@ void gui_messagebox(const char *title, const char *message)
 	SetFrontProcess(&psn);
 	/* END HACK */
 
-	CreateStandardAlert(kAlertStopAlert,
-			CFStringCreateWithCString(NULL, title, kCFStringEncodingASCII),
-			CFStringCreateWithCString(NULL, message, kCFStringEncodingASCII),
-			NULL,
-			&theItem);
+	//CreateStandardAlert(kAlertStopAlert,
+	//		CFStringCreateWithCString(NULL, title, kCFStringEncodingASCII),
+	//		CFStringCreateWithCString(NULL, message, kCFStringEncodingASCII),
+	//		NULL,
+	//		&theItem);
 
-	RunStandardAlert(theItem, NULL, &itemIndex);
+	//RunStandardAlert(theItem, NULL, &itemIndex);
 #elif defined(CONF_FAMILY_UNIX)
 	static char cmd[1024];
 	int err;

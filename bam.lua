@@ -18,7 +18,7 @@ function Script(name)
 	if family == "windows" then
 		return str_replace(name, "/", "\\")
 	end
-	return "python " .. name
+	return "python3 " .. name
 end
 
 function CHash(output, ...)
@@ -138,8 +138,8 @@ function build(settings)
 	else
 		settings.cc.flags:Add("-Wall", "-fno-exceptions")
 		if platform == "macosx" then
-			settings.cc.flags:Add("-mmacosx-version-min=10.5", "-isysroot /Developer/SDKs/MacOSX10.5.sdk")
-			settings.link.flags:Add("-mmacosx-version-min=10.5", "-isysroot /Developer/SDKs/MacOSX10.5.sdk")
+			settings.cc.flags:Add("-mmacosx-version-min=15.0", "-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.1.sdk")
+			settings.link.flags:Add("-mmacosx-version-min=15.0", "-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.1.sdk")
 		elseif config.stackprotector.value == 1 then
 			settings.cc.flags:Add("-fstack-protector", "-fstack-protector-all")
 			settings.link.flags:Add("-fstack-protector", "-fstack-protector-all")
