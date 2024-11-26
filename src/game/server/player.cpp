@@ -4,6 +4,8 @@
 #include <engine/shared/config.h>
 #include "player.h"
 
+#include <game/server/gamemodes/mod.h>
+
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
@@ -21,6 +23,20 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, int Team)
 	m_SpectatorID = SPEC_FREEVIEW;
 	m_LastActionTick = Server()->Tick();
 	m_TeamChangeTick = Server()->Tick();
+
+	// Mutator
+	m_MutatorTeam = TEAM_MUTANT;
+	m_ScienceCount = 0;
+	m_ScienceExplored = 0;
+	m_MutaticLevels = 0;
+	m_ScienceRemembered = 0;
+	m_MyHumanScore = 0;
+	m_MyMutantScore = 0;
+	m_BonusScore = 0;
+	m_BonusScore2 = 0;
+	m_MultiScore = 0;
+	m_MultiScoreTick = Server()->Tick();
+	m_LastInitMutant = 0;
 }
 
 CPlayer::~CPlayer()
@@ -60,26 +76,37 @@ void CPlayer::Tick()
 		}
 	}
 
-	if(!m_pCharacter && m_Team == TEAM_SPECTATORS && m_SpectatorID == SPEC_FREEVIEW)
-		m_ViewPos -= vec2(clamp(m_ViewPos.x-m_LatestActivity.m_TargetX, -500.0f, 500.0f), clamp(m_ViewPos.y-m_LatestActivity.m_TargetY, -400.0f, 400.0f));
-
-	if(!m_pCharacter && m_DieTick+Server()->TickSpeed()*3 <= Server()->Tick())
-		m_Spawning = true;
-
-	if(m_pCharacter)
+	if(!GameServer()->m_World.m_Paused)
 	{
-		if(m_pCharacter->IsAlive())
+		if(!m_pCharacter && m_Team == TEAM_SPECTATORS && m_SpectatorID == SPEC_FREEVIEW)
+			m_ViewPos -= vec2(clamp(m_ViewPos.x-m_LatestActivity.m_TargetX, -500.0f, 500.0f), clamp(m_ViewPos.y-m_LatestActivity.m_TargetY, -400.0f, 400.0f));
+
+		if(!m_pCharacter && m_DieTick+Server()->TickSpeed()*3 <= Server()->Tick())
+			m_Spawning = true;
+
+		if(m_pCharacter)
 		{
-			m_ViewPos = m_pCharacter->m_Pos;
+			if(m_pCharacter->IsAlive())
+			{
+				m_ViewPos = m_pCharacter->m_Pos;
+			}
+			else
+			{
+				delete m_pCharacter;
+				m_pCharacter = 0;
+			}
 		}
-		else
-		{
-			delete m_pCharacter;
-			m_pCharacter = 0;
-		}
+		else if(m_Spawning && m_RespawnTick <= Server()->Tick())
+			TryRespawn();
 	}
-	else if(m_Spawning && m_RespawnTick <= Server()->Tick())
-		TryRespawn();
+	else
+	{
+		++m_RespawnTick;
+		++m_DieTick;
+		++m_ScoreStartTick;
+		++m_LastActionTick;
+		++m_TeamChangeTick;
+	}
 }
 
 void CPlayer::PostTick()
@@ -115,9 +142,41 @@ void CPlayer::Snap(int SnappingClient)
 	StrToInts(&pClientInfo->m_Clan0, 3, Server()->ClientClan(m_ClientID));
 	pClientInfo->m_Country = Server()->ClientCountry(m_ClientID);
 	StrToInts(&pClientInfo->m_Skin0, 6, m_TeeInfos.m_SkinName);
-	pClientInfo->m_UseCustomColor = m_TeeInfos.m_UseCustomColor;
-	pClientInfo->m_ColorBody = m_TeeInfos.m_ColorBody;
-	pClientInfo->m_ColorFeet = m_TeeInfos.m_ColorFeet;
+	pClientInfo->m_UseCustomColor = 1;
+	/*pClientInfo->m_ColorBody = m_TeeInfos.m_ColorBody;
+	pClientInfo->m_ColorFeet = m_TeeInfos.m_ColorFeet;*/
+
+	switch(m_MutatorTeam)
+	{
+		case TEAM_HERO:
+			/*pClientInfo->m_ColorBody = 25 * 0x100000 + 0xff00;
+			pClientInfo->m_ColorFeet = 25 * 0x100000 + 0xff00;*/
+			pClientInfo->m_ColorBody = 26279680;
+			pClientInfo->m_ColorFeet = 26279680;
+			StrToInts(&pClientInfo->m_Clan0, 3, "- Hero -");
+			break;
+                case TEAM_HUMAN:
+			/*pClientInfo->m_ColorBody = 25 * 0x100000 + 0xff72;
+			pClientInfo->m_ColorFeet = 25 * 0x100000 + 0xcc66;*/
+			pClientInfo->m_ColorBody = 26279794;
+			pClientInfo->m_ColorFeet = 26266726;
+			break;
+		case TEAM_MUTANT:
+			/*pClientInfo->m_ColorBody = 128 * 0x100000 + 0xff72;
+			pClientInfo->m_ColorFeet = 128 * 0x100000 + 0xcc66;*/
+			pClientInfo->m_ColorBody = 134283122;
+			pClientInfo->m_ColorFeet = 134270054;
+			StrToInts(&pClientInfo->m_Clan0, 3, "- Mutant-");
+			break;
+		case TEAM_REAPER:
+			/*pClientInfo->m_ColorBody = 128 * 0x100000 + 0xff11;
+			pClientInfo->m_ColorFeet = 128 * 0x100000 + 0xff11;*/
+			pClientInfo->m_ColorBody = 134283025;
+			pClientInfo->m_ColorFeet = 134283025;
+			StrToInts(&pClientInfo->m_Clan0, 3, "- Reaper -");
+			break;
+	}
+
 
 	CNetObj_PlayerInfo *pPlayerInfo = static_cast<CNetObj_PlayerInfo *>(Server()->SnapNewItem(NETOBJTYPE_PLAYERINFO, m_ClientID, sizeof(CNetObj_PlayerInfo)));
 	if(!pPlayerInfo)
@@ -230,7 +289,7 @@ void CPlayer::Respawn()
 		m_Spawning = true;
 }
 
-void CPlayer::SetTeam(int Team)
+void CPlayer::SetTeam(int Team, bool DoChatMsg)
 {
 	// clamp the team
 	Team = GameServer()->m_pController->ClampTeam(Team);
@@ -238,8 +297,11 @@ void CPlayer::SetTeam(int Team)
 		return;
 
 	char aBuf[512];
-	str_format(aBuf, sizeof(aBuf), "'%s' joined the %s", Server()->ClientName(m_ClientID), GameServer()->m_pController->GetTeamName(Team));
-	GameServer()->SendChat(-1, CGameContext::CHAT_ALL, aBuf);
+	if(DoChatMsg)
+	{
+		str_format(aBuf, sizeof(aBuf), "'%s' joined the %s", Server()->ClientName(m_ClientID), GameServer()->m_pController->GetTeamName(Team));
+		GameServer()->SendChat(-1, CGameContext::CHAT_ALL, aBuf);
+	}
 
 	KillCharacter();
 

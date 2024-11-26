@@ -5,7 +5,9 @@
 #include "projectile.h"
 
 CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, vec2 Dir, int Span,
-		int Damage, bool Explosive, float Force, int SoundImpact, int Weapon)
+		int Damage, bool Explosive, float Force, int SoundImpact, int Weapon,
+		int Clusters, int ClusterType, int ClusterLifeSpan, int ClusterDamage, bool ClusterExplosive, float ClusterForce,
+                int ClusterSoundImpact)
 : CEntity(pGameWorld, CGameWorld::ENTTYPE_PROJECTILE)
 {
 	m_Type = Type;
@@ -19,6 +21,14 @@ CProjectile::CProjectile(CGameWorld *pGameWorld, int Type, int Owner, vec2 Pos, 
 	m_Weapon = Weapon;
 	m_StartTick = Server()->Tick();
 	m_Explosive = Explosive;
+
+	m_Clusters = Clusters;
+	m_ClusterType = ClusterType;
+	m_ClusterLifeSpan = ClusterLifeSpan;
+	m_ClusterDamage = ClusterDamage;
+	m_ClusterExplosive = ClusterExplosive;
+	m_ClusterForce = ClusterForce;
+	m_ClusterSoundImpact = ClusterSoundImpact;
 
 	GameWorld()->InsertEntity(this);
 }
@@ -73,13 +83,65 @@ void CProjectile::Tick()
 			GameServer()->CreateSound(CurPos, m_SoundImpact);
 
 		if(m_Explosive)
-			GameServer()->CreateExplosion(CurPos, m_Owner, m_Weapon, false);
+		{
+			// Mutator
+			if(m_Weapon == WEAPON_SHOTGUN)
+			{
+				GameServer()->CreateSound(CurPos, m_SoundImpact);
+				GameServer()->CreateSound(CurPos, SOUND_RIFLE_BOUNCE);
+				GameServer()->CreateExplosion(CurPos, m_Owner, m_Weapon, false);
+			}
+			else
+				GameServer()->CreateExplosion(CurPos, m_Owner, m_Weapon, false);
+		}
 
 		else if(TargetChr)
 			TargetChr->TakeDamage(m_Direction * max(0.001f, m_Force), m_Damage, m_Owner, m_Weapon);
 
+		if(m_Clusters > 0)
+		{
+			int pOwner;
+			vec2 pSpread;
+			CCharacter *OwnerChar = GameServer()->GetPlayerChar(m_Owner);
+			if(OwnerChar)
+			{
+				pOwner = OwnerChar->GetPlayer()->GetCID();
+
+				CProjectile * pCluster;
+				for(int i =0; i < m_Clusters; i++)
+				{
+					//float a = GetAngle(PrevPos);
+					float a = float(i*(360.f/float((m_Clusters+1))));
+					pSpread = CurPos;
+					pCluster = new CProjectile(GameWorld(), m_ClusterType,
+						pOwner,
+						PrevPos,
+						vec2(cosf(a), sinf(a))*1.1f,
+						m_ClusterLifeSpan,
+						m_ClusterDamage,
+						m_ClusterExplosive,
+						m_ClusterForce,
+						m_ClusterSoundImpact,
+						m_ClusterType);
+
+					CNetObj_Projectile p;
+					pCluster->FillInfo(&p);
+
+					CMsgPacker Msg(NETMSGTYPE_SV_EXTRAPROJECTILE);
+					Msg.AddInt(1);
+					for(unsigned i = 0; i < sizeof(CNetObj_Projectile)/sizeof(int); i++)
+						Msg.AddInt(((int *)&p)[i]);
+					Server()->SendMsg(&Msg, 0, pOwner);
+				}
+			}
+		}
 		GameServer()->m_World.DestroyEntity(this);
 	}
+}
+
+void CProjectile::TickPaused()
+{
+	++m_StartTick;
 }
 
 void CProjectile::FillInfo(CNetObj_Projectile *pProj)
@@ -102,4 +164,14 @@ void CProjectile::Snap(int SnappingClient)
 	CNetObj_Projectile *pProj = static_cast<CNetObj_Projectile *>(Server()->SnapNewItem(NETOBJTYPE_PROJECTILE, m_ID, sizeof(CNetObj_Projectile)));
 	if(pProj)
 		FillInfo(pProj);
+}
+
+vec2 CProjectile::GetVel()
+{
+	return m_Direction;
+}
+
+void CProjectile::SetVel(vec2 Vel)
+{
+	m_Direction = Vel;
 }

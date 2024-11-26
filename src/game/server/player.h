@@ -20,7 +20,7 @@ public:
 
 	void TryRespawn();
 	void Respawn();
-	void SetTeam(int Team);
+	void SetTeam(int Team, bool DoChatMsg=true);
 	int GetTeam() const { return m_Team; };
 	int GetCID() const { return m_ClientID; };
 
@@ -95,6 +95,21 @@ public:
 		int m_Min;
 		int m_Max;
 	} m_Latency;
+
+	// Mutator
+	int m_MutatorTeam;
+	int m_ScienceCount;
+	int m_ScienceExplored;
+	int m_MutaticLevels;
+	int m_ScienceRemembered;
+
+	int m_MyHumanScore;
+	int m_MyMutantScore;
+	int m_BonusScore;
+	int m_BonusScore2;
+	int m_MultiScore;
+	int m_MultiScoreTick;
+	int m_LastInitMutant;
 
 private:
 	CCharacter *m_pCharacter;

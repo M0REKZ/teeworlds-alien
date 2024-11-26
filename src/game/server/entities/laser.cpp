@@ -3,10 +3,12 @@
 #include <game/generated/protocol.h>
 #include <game/server/gamecontext.h>
 #include "laser.h"
+#include <game/server/gamemodes/mod.h>
 
-CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner)
+CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner, int SubType)
 : CEntity(pGameWorld, CGameWorld::ENTTYPE_LASER)
 {
+	m_SubType = SubType;
 	m_Pos = Pos;
 	m_Owner = Owner;
 	m_Energy = StartEnergy;
@@ -18,19 +20,76 @@ CLaser::CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEner
 }
 
 
+// Mutator
+const char *CLaser::m_SubDescription[] =
+{
+	"* Laser *", "* Riddle-Laser *", "* Tele-Laserinator *", "* Healing-Laser *"
+};
+
 bool CLaser::HitCharacter(vec2 From, vec2 To)
 {
 	vec2 At;
-	CCharacter *OwnerChar = GameServer()->GetPlayerChar(m_Owner);
-	CCharacter *Hit = GameServer()->m_World.IntersectCharacter(m_Pos, To, 0.f, At, OwnerChar);
-	if(!Hit)
+	CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
+	CCharacter *pHit = GameServer()->m_World.IntersectCharacter(m_Pos, To, 0.f, At, pOwnerChar);
+	if(!pHit)
 		return false;
 
-	m_From = From;
-	m_Pos = At;
-	m_Energy = -1;
-	Hit->TakeDamage(vec2(0.f, 0.f), GameServer()->Tuning()->m_LaserDamage, m_Owner, WEAPON_RIFLE);
-	return true;
+	// Tele-Laser
+	if(m_SubType == LASER_SUBTYPE_TELE && pOwnerChar)
+	{
+		if(pHit->IsAlive() && pOwnerChar->IsAlive())
+		{
+			vec2 TeleFrom = pOwnerChar->m_Pos;
+			vec2 TeleTo = pHit->m_Pos;
+			pOwnerChar->SetPos(TeleTo);
+			pHit->SetPos(TeleFrom);
+		}
+		else
+			return false;
+	}
+
+	// Healing-Laser
+	if(m_SubType == LASER_SUBTYPE_HEALING)
+	{
+		if(pHit->GetPlayer()->m_MutatorTeam <= TEAM_MUTANT)
+		{
+			pHit->ReMutate();
+			if(pOwnerChar && pHit)
+			{
+				CPlayer *pKiller = pOwnerChar->GetPlayer();
+				CPlayer *pVictim = pHit->GetPlayer();
+				if(pKiller && pVictim)
+				{
+					int ModeSpecial = GameServer()->m_pController->OnCharacterDeath(pHit, GameServer()->m_apPlayers[pKiller->GetCID()], WEAPON_RIFLE);
+					CNetMsg_Sv_KillMsg Msg;
+					Msg.m_Killer = pKiller->GetCID();
+					Msg.m_Victim = pVictim->GetCID();
+					Msg.m_Weapon = WEAPON_RIFLE;
+					Msg.m_ModeSpecial = ModeSpecial;
+					Server()->SendPackMsg(&Msg, MSGFLAG_VITAL, -1);
+					pKiller->m_Score++;
+				}
+			}
+		}
+		else
+			pHit->IncreaseHealth(10);
+	}
+	else
+		pHit->TakeDamage(vec2(0.f, 0.f), GameServer()->Tuning()->m_LaserDamage, m_Owner, WEAPON_RIFLE);
+
+	// Riddle-Laser
+	if(m_SubType == LASER_SUBTYPE_RIDDLE)
+	{
+		GameServer()->CreateSound(m_Pos, SOUND_RIFLE_BOUNCE);
+		return false;
+	}
+	else
+	{
+		m_From = From;
+		m_Pos = At;
+		m_Energy = -1;
+		return true;
+	}
 }
 
 void CLaser::DoBounce()
@@ -89,6 +148,11 @@ void CLaser::Tick()
 {
 	if(Server()->Tick() > m_EvalTick+(Server()->TickSpeed()*GameServer()->Tuning()->m_LaserBounceDelay)/1000.0f)
 		DoBounce();
+}
+
+void CLaser::TickPaused()
+{
+	++m_EvalTick;
 }
 
 void CLaser::Snap(int SnappingClient)

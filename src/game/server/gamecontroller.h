@@ -64,6 +64,7 @@ public:
 	const char *m_pGameType;
 
 	bool IsTeamplay() const;
+	bool IsGameOver() const { return m_GameOverTick != -1; }
 
 	IGameController(class CGameContext *pGameServer);
 	virtual ~IGameController();
@@ -141,6 +142,11 @@ public:
 	int ClampTeam(int Team);
 
 	virtual void PostReset();
+	virtual int MutGameRunning() { return 0; }
+	virtual int MutPowerSupply() { return 0; }
+	virtual void MutSetPowerSupply(int State) { return; }
+	virtual bool ReapinatorOnline() { return 0; }
+	virtual bool FoundHammerPickups() { return 0; }
 };
 
 #endif

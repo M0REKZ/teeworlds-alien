@@ -3,6 +3,8 @@
 #include <game/generated/protocol.h>
 #include <game/server/gamecontext.h>
 #include "pickup.h"
+#include <game/server/gamemodes/mod.h>
+#include <engine/shared/config.h>
 
 CPickup::CPickup(CGameWorld *pGameWorld, int Type, int SubType)
 : CEntity(pGameWorld, CGameWorld::ENTTYPE_PICKUP)
@@ -44,6 +46,10 @@ void CPickup::Tick()
 	CCharacter *pChr = GameServer()->m_World.ClosestCharacter(m_Pos, 20.0f, 0);
 	if(pChr && pChr->IsAlive())
 	{
+		pChr->SetOnScience(0);
+		if(pChr->GetPlayer()->m_MutatorTeam <= TEAM_MUTANT)
+			return;
+
 		// player picked us up, is someone was hooking us, let them go
 		int RespawnTime = -1;
 		switch (m_Type)
@@ -67,7 +73,39 @@ void CPickup::Tick()
 			case POWERUP_WEAPON:
 				if(m_Subtype >= 0 && m_Subtype < NUM_WEAPONS)
 				{
-					if(pChr->GiveWeapon(m_Subtype, 10))
+					if(m_Subtype == WEAPON_HAMMER)
+					{
+						pChr->SetOnScience(1);
+						if(pChr->GetActiveWeapon() == WEAPON_HAMMER && pChr->IsFiring())
+						{
+							if(GameServer()->m_pController->MutPowerSupply() && g_Config.m_SvScienceSuccessCount > 0)
+							{
+								if(pChr->DecreaseArmor(1))
+								{
+									pChr->SetShowInfoTick(Server()->Tick() + 2 * Server()->TickSpeed());
+									m_SpawnTick = Server()->Tick() + g_Config.m_SvScienceSpawn * Server()->TickSpeed() / 1000;
+									GameServer()->CreateSound(m_Pos, SOUND_PICKUP_ARMOR);
+									pChr->GetPlayer()->m_ScienceCount++;
+									if(pChr->GetPlayer()->m_ScienceCount >= g_Config.m_SvScienceSuccessCount)
+									pChr->ScienceResearch(0);
+								}
+								else if(Server()->Tick() - pChr->GetShowInfoTick() > 0)
+								{
+									pChr->SetShowInfoTick(Server()->Tick() + 2 * Server()->TickSpeed());
+									GameServer()->SendChatTarget(pChr->GetPlayer()->GetCID(),"Shields required for research!");
+								}
+							}
+							else if(Server()->Tick() - pChr->GetShowInfoTick() > 0)
+							{
+								pChr->SetShowInfoTick(Server()->Tick() + 2 * Server()->TickSpeed());
+								if(g_Config.m_SvScienceSuccessCount > 0)
+									GameServer()->SendChatTarget(pChr->GetPlayer()->GetCID(),"Research failed! Generator is down!");
+								else
+									GameServer()->SendChatTarget(pChr->GetPlayer()->GetCID(),"Research failed! Station is disabled!");
+							}
+						}
+					}
+					else if(pChr->GiveWeapon(m_Subtype, 10))
 					{
 						RespawnTime = g_pData->m_aPickups[m_Type].m_Respawntime;
 
@@ -115,6 +153,12 @@ void CPickup::Tick()
 			m_SpawnTick = Server()->Tick() + Server()->TickSpeed() * RespawnTime;
 		}
 	}
+}
+
+void CPickup::TickPaused()
+{
+	if(m_SpawnTick != -1)
+		++m_SpawnTick;
 }
 
 void CPickup::Snap(int SnappingClient)

@@ -8,6 +8,7 @@
 #include <game/generated/protocol.h>
 
 #include <game/gamecore.h>
+#include <game/server/entities/laser.h>
 
 enum
 {
@@ -30,6 +31,7 @@ public:
 	virtual void Destroy();
 	virtual void Tick();
 	virtual void TickDefered();
+	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
 
 	bool IsGrounded();
@@ -48,6 +50,7 @@ public:
 
 	void Die(int Killer, int Weapon);
 	bool TakeDamage(vec2 Force, int Dmg, int From, int Weapon);
+	void TakeMinorDamage();
 
 	bool Spawn(class CPlayer *pPlayer, vec2 Pos);
 	bool Remove();
@@ -55,7 +58,7 @@ public:
 	bool IncreaseHealth(int Amount);
 	bool IncreaseArmor(int Amount);
 
-	bool GiveWeapon(int Weapon, int Ammo);
+	bool GiveWeapon(int Weapon, int Ammo, int Special=0);
 	void GiveNinja();
 
 	void SetEmote(int Emote, int Tick);
@@ -63,9 +66,70 @@ public:
 	bool IsAlive() const { return m_Alive; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
 
+	// Mutator
+	void SetPreStartGame();
+	void Mutate();
+	void ReMutate();
+	void Metamorphose();
+	void ScienceResearch(bool AutoResearch);
+	void BecameHero(bool AirStrike);
+	void BecameReaper();
+	void AirStrike();
+
+	vec2 GetVel();
+	void SetVel(vec2 Vel);
+	void SetPos(vec2 Pos);
+	bool DecreaseArmor(int Amount);
+	int GetActiveWeapon();
+	bool IsFiring();
+	void CycleLaserSubTypes();
+	void DestroyLaserWall();
+	void SetOnScience(bool val);
+	bool IsOnScience();
+	bool PrevOnScience();
+	bool BreakCircuit();
+	void ShowScanResults();
+	void SetShowInfoTick(int Tick);
+	int GetShowInfoTick();
+	bool MutanticEyes();
+
 private:
+
 	// player controlling this character
 	class CPlayer *m_pPlayer;
+
+	// Mutator
+	class CLaserWall *m_LaserWall;
+	int m_MutanticEmoteTick;
+	int m_BioHazardDamageTick;
+	int m_AlienMetaTick;
+	int m_MutanticSpawnProtection;
+	int m_MutanticArmorDJCount;
+	bool m_OnScience;
+	int m_OnScienceOffTick;
+	bool m_PrevOnScience;
+	bool m_Invisible;
+	bool m_PrevOnReapinator;
+	bool m_OnReapinator;
+
+	bool m_OnTurret;
+	bool m_TurretActive;
+	int m_TurretAmmo;
+	int m_PrevTurretSwitchAmmo;
+	bool m_PrevTurretSwitchGot;
+	bool m_PrevOnTurret;
+	int m_OwnAirstrike;
+
+	int m_EnergyUpTick;
+	int m_OnEnergyUp;
+	int m_PrevOnEnergyUp;
+
+	int m_ShowInfoTick;
+
+        int m_Col1;
+        int m_Col2;
+        int m_Col3;
+        int m_Col4;
 
 	bool m_Alive;
 
@@ -79,12 +143,21 @@ private:
 		int m_Ammo;
 		int m_Ammocost;
 		bool m_Got;
+		int m_SubType;
+		int m_SpecialAmmo;
+		int m_NormalAmmo;
 
 	} m_aWeapons[NUM_WEAPONS];
 
 	int m_ActiveWeapon;
 	int m_LastWeapon;
+
+	// Mutator
 	int m_QueuedWeapon;
+	int m_QueuedLaser;
+	int m_LaserCycleTick;
+	bool m_LaserCycleInfoSwitch;
+	bool m_OwnLaserSubType[LASER_MAX_SUBTYPE];
 
 	int m_ReloadTimer;
 	int m_AttackTick;
@@ -93,6 +166,11 @@ private:
 
 	int m_EmoteType;
 	int m_EmoteStop;
+
+	// Mutator
+	bool m_MutanticEyeOn;
+	bool m_MutanticEyeFlip;
+	int m_MutanticEyeFlipTick;
 
 	// last tick that the player took any action ie some input
 	int m_LastAction;
