@@ -673,8 +673,8 @@ void CCharacter::FireWeapon()
 				CNetObj_Projectile p;
 				pProj->FillInfo(&p);
 
-				for(unsigned i = 0; i < sizeof(CNetObj_Projectile)/sizeof(int); i++)
-					Msg.AddInt(((int *)&p)[i]);
+				//for(unsigned i = 0; i < sizeof(CNetObj_Projectile)/sizeof(int); i++)
+				//	Msg.AddInt(((int *)&p)[i]);
 			}
 
 			GameServer()->CreateSound(m_Pos, SOUND_SHOTGUN_FIRE);

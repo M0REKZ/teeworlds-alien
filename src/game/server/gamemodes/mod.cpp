@@ -488,7 +488,7 @@ void CGameControllerMOD::UpdateHiScore()
 	score->m_HighScoreMutant = m_HighScoreMutant;
 	strcpy(score->m_HighScoreNameMutant,m_HighScoreNameMutant);
 	strcpy(score->m_HighScoreClanMutant,m_HighScoreClanMutant);
-	void *pSaveHiScoreThread = teethread_create(SaveHiScoreThread, score);
+	void *pSaveHiScoreThread = thread_init(SaveHiScoreThread, score);
 #if defined(CONF_FAMILY_UNIX)
 	pthread_detach((pthread_t)pSaveHiScoreThread);
 #endif
@@ -516,7 +516,7 @@ void CGameControllerMOD::SaveHiScoreThread(void *data)
 		delete score;
 	}
 	f.close();
-	lock_release(HiScoreMutex);
+	lock_unlock(HiScoreMutex);
 }
 
 bool CGameControllerMOD::LoadHiScore()

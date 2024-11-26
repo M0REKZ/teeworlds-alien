@@ -48,7 +48,7 @@ SDL = {
 				client_settings.cc.includes:Add("/Library/Frameworks/SDL.framework/Headers")
 			end
 
-			if option.use_winlib > 0 then
+			if option.use_winlib then
 				settings.cc.includes:Add(SDL.basepath .. "/include")
 				if option.use_winlib == 32 then
 					settings.link.libpath:Add(SDL.basepath .. "/windows/lib32")

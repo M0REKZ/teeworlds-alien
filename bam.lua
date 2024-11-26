@@ -311,7 +311,7 @@ release_settings.debug = 0
 release_settings.optimize = 1
 release_settings.cc.defines:Add("CONF_RELEASE")
 
-if platform == "macosx" then
+if platform == "macosxxx" then
 	debug_settings_ppc = debug_settings:Copy()
 	debug_settings_ppc.config_name = "debug_ppc"
 	debug_settings_ppc.config_ext = "_ppc_d"

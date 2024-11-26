@@ -638,69 +638,11 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 	if(Server()->ClientIngame(ClientID))
 	{
-		CNetMsg_Cl_Say *pMsg = (CNetMsg_Cl_Say *)pRawMsg;
-		int Team = pMsg->m_Team;
-		if(Team)
-		{
-			if(pPlayer->GetTeam() > -1)
-				Team = pPlayer->m_MutatorTeam;
-			else
-				Team = TEAM_SPECTATORS;
-		}
-		else
-			Team = CGameContext::CHAT_ALL;
-
-		if(g_Config.m_SvSpamprotection && pPlayer->m_LastChat && pPlayer->m_LastChat+Server()->TickSpeed() > Server()->Tick())
-			return;
-
-		pPlayer->m_LastChat = Server()->Tick();
-
-		// check for invalid chars
-		unsigned char *pMessage = (unsigned char *)pMsg->m_pMessage;
-		while (*pMessage)
+		if(MsgID == NETMSGTYPE_CL_SAY)
 		{
 			if(g_Config.m_SvSpamprotection && pPlayer->m_LastChat && pPlayer->m_LastChat+Server()->TickSpeed() > Server()->Tick())
 				return;
-			
-			// Mutator
-			if(pMsg->m_pMessage[0] == '/' && m_pController && (str_comp(m_pController->m_pGameType,"Alien") == 0 || str_comp(m_pController->m_pGameType,"TEST") == 0))
-			{
-				if((!str_comp_nocase(pMsg->m_pMessage,"/info")) || (!str_comp_nocase(pMsg->m_pMessage, "/help")))
-				{
-					SendChatTarget(ClientID, "\n-------------------------------------\nAlien-TW RC3 by Mo(2)\n-------------------------------------\n/cyclelaser: Switch explored laser-subtypes.\n/airstrike: Use airstrike if you get one.\nResearch on 'hammer-pickup' with hammer (cost shields)\n\n");
-					return;
-				}
-				else if(str_comp_nocase(pMsg->m_pMessage,"/cyclelaser") == 0)
-				{
-					if(pPlayer->GetCharacter())
-						pPlayer->GetCharacter()->CycleLaserSubTypes();
-					else
-						SendChatTarget(ClientID,"No laser available.");
-					return;
-				}
-				else if(str_comp_nocase(pMsg->m_pMessage,"/airstrike") == 0)
-				{
-					if(pPlayer->GetCharacter())
-						pPlayer->GetCharacter()->AirStrike();
-					else
-						SendChatTarget(ClientID,"No airstrike available.");
-					return;
-				}
-				else
-				{
-					SendChatTarget(ClientID, "Unknown command.\nType /info to get help.");
-					return;
-				}
-			}
-			
-			SendChat(ClientID, Team, pMsg->m_pMessage);
-		}
-	else if(MsgID == NETMSGTYPE_CL_CALLVOTE)
-	{
-		if(g_Config.m_SvSpamprotection && pPlayer->m_LastVoteTry && pPlayer->m_LastVoteTry+Server()->TickSpeed()*3 > Server()->Tick())
-			return;
-		if(MsgID == NETMSGTYPE_CL_SAY)
-		{
+
 			CNetMsg_Cl_Say *pMsg = (CNetMsg_Cl_Say *)pRawMsg;
 			int Team = pMsg->m_Team ? pPlayer->GetTeam() : CGameContext::CHAT_ALL;
 			
@@ -712,17 +654,17 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			{
 				const char *pStrOld = p;
 				int Code = str_utf8_decode(&p);
-				
+
 				// check if unicode is not empty
 				if(Code > 0x20 && Code != 0xA0 && Code != 0x034F && (Code < 0x2000 || Code > 0x200F) && (Code < 0x2028 || Code > 0x202F) &&
-				   (Code < 0x205F || Code > 0x2064) && (Code < 0x206A || Code > 0x206F) && (Code < 0xFE00 || Code > 0xFE0F) &&
-				   Code != 0xFEFF && (Code < 0xFFF9 || Code > 0xFFFC))
+					(Code < 0x205F || Code > 0x2064) && (Code < 0x206A || Code > 0x206F) && (Code < 0xFE00 || Code > 0xFE0F) &&
+					Code != 0xFEFF && (Code < 0xFFF9 || Code > 0xFFFC))
 				{
 					pEnd = 0;
 				}
 				else if(pEnd == 0)
 					pEnd = pStrOld;
-				
+
 				if(++Length >= 127)
 				{
 					*(const_cast<char *>(p)) = 0;
@@ -800,204 +742,6 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			}
 			else if(str_comp_nocase(pMsg->m_Type, "kick") == 0)
 			{
-				SendChatTarget(ClientID, "Invalid client id to kick");
-				return;
-			}
-			if(KickID == ClientID)
-			{
-				SendChatTarget(ClientID, "You can't kick yourself");
-				return;
-			}
-			if(Server()->IsAuthed(KickID))
-			{
-				SendChatTarget(ClientID, "You can't kick admins");
-				char aBufKick[128];
-				str_format(aBufKick, sizeof(aBufKick), "'%s' called for vote to kick you", Server()->ClientName(ClientID));
-				SendChatTarget(KickID, aBufKick);
-				return;
-			}
-
-			str_format(aChatmsg, sizeof(aChatmsg), "'%s' called for vote to kick '%s' (%s)", Server()->ClientName(ClientID), Server()->ClientName(KickID), pReason);
-			str_format(aDesc, sizeof(aDesc), "Kick '%s'", Server()->ClientName(KickID));
-			if (!g_Config.m_SvVoteKickBantime)
-				str_format(aCmd, sizeof(aCmd), "kick %d Kicked by vote", KickID);
-			else
-			{
-				char aAddrStr[NETADDR_MAXSTRSIZE] = {0};
-				Server()->GetClientAddr(KickID, aAddrStr, sizeof(aAddrStr));
-				str_format(aCmd, sizeof(aCmd), "ban %s %d Banned by vote", aAddrStr, g_Config.m_SvVoteKickBantime);
-			}
-		}
-		else if(str_comp_nocase(pMsg->m_Type, "spectate") == 0)
-		{
-			if(!g_Config.m_SvVoteSpectate)
-			{
-				SendChatTarget(ClientID, "Server does not allow voting to move players to spectators");
-				return;
-			}
-
-			int SpectateID = str_toint(pMsg->m_Value);
-			if(SpectateID < 0 || SpectateID >= MAX_CLIENTS || !m_apPlayers[SpectateID] || m_apPlayers[SpectateID]->GetTeam() == TEAM_SPECTATORS)
-			{
-				SendChatTarget(ClientID, "Invalid client id to move");
-				return;
-			}
-			if(SpectateID == ClientID)
-			{
-				SendChatTarget(ClientID, "You can't move yourself");
-				return;
-			}
-
-			str_format(aChatmsg, sizeof(aChatmsg), "'%s' called for vote to move '%s' to spectators (%s)", Server()->ClientName(ClientID), Server()->ClientName(SpectateID), pReason);
-			str_format(aDesc, sizeof(aDesc), "move '%s' to spectators", Server()->ClientName(SpectateID));
-			str_format(aCmd, sizeof(aCmd), "set_team %d -1 %d", SpectateID, g_Config.m_SvVoteSpectateRejoindelay);
-		}
-
-		if(aCmd[0])
-		{
-			SendChat(-1, CGameContext::CHAT_ALL, aChatmsg);
-			StartVote(aDesc, aCmd, pReason);
-			pPlayer->m_Vote = 1;
-			pPlayer->m_VotePos = m_VotePos = 1;
-			m_VoteCreator = ClientID;
-			pPlayer->m_LastVoteCall = Now;
-		}
-	}
-	else if(MsgID == NETMSGTYPE_CL_VOTE)
-	{
-		if(!m_VoteCloseTime)
-			return;
-
-		if(pPlayer->m_Vote == 0)
-		{
-			CNetMsg_Cl_Vote *pMsg = (CNetMsg_Cl_Vote *)pRawMsg;
-			if(!pMsg->m_Vote)
-				return;
-
-			pPlayer->m_Vote = pMsg->m_Vote;
-			pPlayer->m_VotePos = ++m_VotePos;
-			m_VoteUpdate = true;
-		}
-	}
-	else if (MsgID == NETMSGTYPE_CL_SETTEAM && !m_World.m_Paused)
-	{
-		CNetMsg_Cl_SetTeam *pMsg = (CNetMsg_Cl_SetTeam *)pRawMsg;
-
-		if(pPlayer->GetTeam() == pMsg->m_Team || (g_Config.m_SvSpamprotection && pPlayer->m_LastSetTeam && pPlayer->m_LastSetTeam+Server()->TickSpeed()*3 > Server()->Tick()))
-			return;
-
-		if(pMsg->m_Team != TEAM_SPECTATORS && m_LockTeams)
-		{
-			pPlayer->m_LastSetTeam = Server()->Tick();
-			SendBroadcast("Teams are locked", ClientID);
-			return;
-		}
-
-		if(pPlayer->m_TeamChangeTick > Server()->Tick())
-		{
-			pPlayer->m_LastSetTeam = Server()->Tick();
-			int TimeLeft = (pPlayer->m_TeamChangeTick - Server()->Tick())/Server()->TickSpeed();
-			char aBuf[128];
-			str_format(aBuf, sizeof(aBuf), "Time to wait before changing team: %02d:%02d", TimeLeft/60, TimeLeft%60);
-			SendBroadcast(aBuf, ClientID);
-			return;
-		}
-
-		// Switch team on given client and kill/respawn him
-		if(m_pController->CanJoinTeam(pMsg->m_Team, ClientID))
-		{
-			if(m_pController->CanChangeTeam(pPlayer, pMsg->m_Team))
-			{
-				pPlayer->m_LastSetTeam = Server()->Tick();
-				if(pPlayer->GetTeam() == TEAM_SPECTATORS || pMsg->m_Team == TEAM_SPECTATORS)
-					m_VoteUpdate = true;
-				pPlayer->SetTeam(pMsg->m_Team);
-				(void)m_pController->CheckTeamBalance();
-				pPlayer->m_TeamChangeTick = Server()->Tick();
-			}
-			else
-				SendBroadcast("Teams must be balanced, please join other team", ClientID);
-		}
-		else
-		{
-			char aBuf[128];
-			str_format(aBuf, sizeof(aBuf), "Only %d active players are allowed", Server()->MaxClients()-g_Config.m_SvSpectatorSlots);
-			SendBroadcast(aBuf, ClientID);
-		}
-	}
-	else if (MsgID == NETMSGTYPE_CL_SETSPECTATORMODE && !m_World.m_Paused)
-	{
-		CNetMsg_Cl_SetSpectatorMode *pMsg = (CNetMsg_Cl_SetSpectatorMode *)pRawMsg;
-
-		if(pPlayer->GetTeam() != TEAM_SPECTATORS || pPlayer->m_SpectatorID == pMsg->m_SpectatorID || ClientID == pMsg->m_SpectatorID ||
-			(g_Config.m_SvSpamprotection && pPlayer->m_LastSetSpectatorMode && pPlayer->m_LastSetSpectatorMode+Server()->TickSpeed()*3 > Server()->Tick()))
-			return;
-
-		pPlayer->m_LastSetSpectatorMode = Server()->Tick();
-		if(pMsg->m_SpectatorID != SPEC_FREEVIEW && (!m_apPlayers[pMsg->m_SpectatorID] || m_apPlayers[pMsg->m_SpectatorID]->GetTeam() == TEAM_SPECTATORS))
-			SendChatTarget(ClientID, "Invalid spectator id used");
-		else
-			pPlayer->m_SpectatorID = pMsg->m_SpectatorID;
-	}
-	else if (MsgID == NETMSGTYPE_CL_STARTINFO)
-	{
-		if(pPlayer->m_IsReady)
-			return;
-
-		CNetMsg_Cl_StartInfo *pMsg = (CNetMsg_Cl_StartInfo *)pRawMsg;
-		pPlayer->m_LastChangeInfo = Server()->Tick();
-
-		// set start infos
-		Server()->SetClientName(ClientID, pMsg->m_pName);
-		Server()->SetClientClan(ClientID, pMsg->m_pClan);
-		Server()->SetClientCountry(ClientID, pMsg->m_Country);
-		str_copy(pPlayer->m_TeeInfos.m_SkinName, pMsg->m_pSkin, sizeof(pPlayer->m_TeeInfos.m_SkinName));
-		pPlayer->m_TeeInfos.m_UseCustomColor = pMsg->m_UseCustomColor;
-		pPlayer->m_TeeInfos.m_ColorBody = pMsg->m_ColorBody;
-		pPlayer->m_TeeInfos.m_ColorFeet = pMsg->m_ColorFeet;
-		m_pController->OnPlayerInfoChange(pPlayer);
-
-		// send vote options
-		CNetMsg_Sv_VoteClearOptions ClearMsg;
-		Server()->SendPackMsg(&ClearMsg, MSGFLAG_VITAL, ClientID);
-
-		CNetMsg_Sv_VoteOptionListAdd OptionMsg;
-		int NumOptions = 0;
-		OptionMsg.m_pDescription0 = "";
-		OptionMsg.m_pDescription1 = "";
-		OptionMsg.m_pDescription2 = "";
-		OptionMsg.m_pDescription3 = "";
-		OptionMsg.m_pDescription4 = "";
-		OptionMsg.m_pDescription5 = "";
-		OptionMsg.m_pDescription6 = "";
-		OptionMsg.m_pDescription7 = "";
-		OptionMsg.m_pDescription8 = "";
-		OptionMsg.m_pDescription9 = "";
-		OptionMsg.m_pDescription10 = "";
-		OptionMsg.m_pDescription11 = "";
-		OptionMsg.m_pDescription12 = "";
-		OptionMsg.m_pDescription13 = "";
-		OptionMsg.m_pDescription14 = "";
-		CVoteOptionServer *pCurrent = m_pVoteOptionFirst;
-		while(pCurrent)
-		{
-			switch(NumOptions++)
-			{
-			case 0: OptionMsg.m_pDescription0 = pCurrent->m_aDescription; break;
-			case 1: OptionMsg.m_pDescription1 = pCurrent->m_aDescription; break;
-			case 2: OptionMsg.m_pDescription2 = pCurrent->m_aDescription; break;
-			case 3: OptionMsg.m_pDescription3 = pCurrent->m_aDescription; break;
-			case 4: OptionMsg.m_pDescription4 = pCurrent->m_aDescription; break;
-			case 5: OptionMsg.m_pDescription5 = pCurrent->m_aDescription; break;
-			case 6: OptionMsg.m_pDescription6 = pCurrent->m_aDescription; break;
-			case 7: OptionMsg.m_pDescription7 = pCurrent->m_aDescription; break;
-			case 8: OptionMsg.m_pDescription8 = pCurrent->m_aDescription; break;
-			case 9: OptionMsg.m_pDescription9 = pCurrent->m_aDescription; break;
-			case 10: OptionMsg.m_pDescription10 = pCurrent->m_aDescription; break;
-			case 11: OptionMsg.m_pDescription11 = pCurrent->m_aDescription; break;
-			case 12: OptionMsg.m_pDescription12 = pCurrent->m_aDescription; break;
-			case 13: OptionMsg.m_pDescription13 = pCurrent->m_aDescription; break;
-			case 14:
 				if(!g_Config.m_SvVoteKick)
 				{
 					SendChatTarget(ClientID, "Server does not allow voting to kick players");
@@ -1227,49 +971,6 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			pPlayer->m_TeeInfos.m_ColorFeet = pMsg->m_ColorFeet;
 			m_pController->OnPlayerInfoChange(pPlayer);
 
-		SendEmoticon(ClientID, pMsg->m_Emoticon);
-
-		CCharacter* pChr = pPlayer->GetCharacter();
-		if(pChr && !pChr->MutanticEyes())
-		{
-			switch(pMsg->m_Emoticon)
-			{
-			case EMOTICON_EXCLAMATION:
-			case EMOTICON_GHOST:
-			case EMOTICON_QUESTION:
-			case EMOTICON_WTF:
-					pChr->SetEmote(EMOTE_SURPRISE, Server()->Tick() + 2 * Server()->TickSpeed());
-					break;
-			case EMOTICON_DOTDOT:
-			case EMOTICON_DROP:
-			case EMOTICON_ZZZ:
-					pChr->SetEmote(EMOTE_BLINK, Server()->Tick() + 2 * Server()->TickSpeed());
-					break;
-			case EMOTICON_EYES:
-			case EMOTICON_HEARTS:
-			case EMOTICON_MUSIC:
-					pChr->SetEmote(EMOTE_HAPPY, Server()->Tick() + 2 * Server()->TickSpeed());
-					break;
-			case EMOTICON_OOP:
-			case EMOTICON_SORRY:
-			case EMOTICON_SUSHI:
-					pChr->SetEmote(EMOTE_PAIN, Server()->Tick() + 2 * Server()->TickSpeed());
-					break;
-			case EMOTICON_DEVILTEE:
-			case EMOTICON_SPLATTEE:
-			case EMOTICON_ZOMG:
-					pChr->SetEmote(EMOTE_ANGRY, Server()->Tick() + 2 * Server()->TickSpeed());
-					break;
-			default:
-					pChr->SetEmote(EMOTE_NORMAL, Server()->Tick() + 2 * Server()->TickSpeed());
-					break;
-                        }
-                }
-	}
-	else if (MsgID == NETMSGTYPE_CL_KILL && !m_World.m_Paused)
-	{
-		if(pPlayer->m_LastKill && pPlayer->m_LastKill+Server()->TickSpeed()*3 > Server()->Tick())
-			return;
 			// send vote options
 			CNetMsg_Sv_VoteClearOptions ClearMsg;
 			Server()->SendPackMsg(&ClearMsg, MSGFLAG_VITAL, ClientID);

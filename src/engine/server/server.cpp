@@ -294,8 +294,8 @@ int CServer::TrySetClientName(int ClientID, const char *pName)
 	char aTrimmedName[64];
 
 	// trim the name
-	str_copy(aTrimmedName, StrUTF8Ltrim(pName), sizeof(aTrimmedName));
-	StrUTF8Rtrim(aTrimmedName);
+	str_copy(aTrimmedName, StrLtrim(pName), sizeof(aTrimmedName));
+	StrRtrim(aTrimmedName);
 
 	// check for empty names
 	if(!aTrimmedName[0])
