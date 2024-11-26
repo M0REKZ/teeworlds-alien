@@ -33,6 +33,13 @@ void dbg_assert(int test, const char *msg);
 #define dbg_assert(test,msg) dbg_assert_imp(__FILE__, __LINE__, test, msg)
 void dbg_assert_imp(const char *filename, int line, int test, const char *msg);
 
+
+#ifdef __clang_analyzer__
+#include <assert.h>
+#undef dbg_assert
+#define dbg_assert(test,msg) assert(test)
+#endif
+
 /*
 	Function: dbg_break
 		Breaks into the debugger.
@@ -213,6 +220,21 @@ IOHANDLE io_open(const char *filename, int flags);
 unsigned io_read(IOHANDLE io, void *buffer, unsigned size);
 
 /*
+	Function: io_unread_byte
+		"Unreads" a single byte, making it available for future read
+		operations.
+
+	Parameters:
+		io - Handle to the file to unread the byte from.
+		byte - Byte to unread.
+
+	Returns:
+		Returns 0 on success and 1 on failure.
+
+*/
+unsigned io_unread_byte(IOHANDLE io, unsigned char byte);
+
+/*
 	Function: io_skip
 		Skips data in a file.
 
@@ -345,7 +367,7 @@ IOHANDLE io_stderr();
 void thread_sleep(int milliseconds);
 
 /*
-	Function: thread_create
+	Function: thread_init
 		Creates a new thread.
 
 	Parameters:
@@ -353,7 +375,7 @@ void thread_sleep(int milliseconds);
 		user - Pointer to pass to the thread.
 
 */
-void *teethread_create(void (*threadfunc)(void *), void *user);
+void *thread_init(void (*threadfunc)(void *), void *user);
 
 /*
 	Function: thread_wait
@@ -396,9 +418,28 @@ typedef void* LOCK;
 LOCK lock_create();
 void lock_destroy(LOCK lock);
 
-int lock_try(LOCK lock);
+int lock_trylock(LOCK lock);
 void lock_wait(LOCK lock);
-void lock_release(LOCK lock);
+void lock_unlock(LOCK lock);
+
+
+/* Group: Semaphores */
+
+#if !defined(CONF_PLATFORM_MACOSX)
+	#if defined(CONF_FAMILY_UNIX)
+		#include <semaphore.h>
+		typedef sem_t SEMAPHORE;
+	#elif defined(CONF_FAMILY_WINDOWS)
+		typedef void* SEMAPHORE;
+	#else
+		#error missing sempahore implementation
+	#endif
+
+	void semaphore_init(SEMAPHORE *sem);
+	void semaphore_wait(SEMAPHORE *sem);
+	void semaphore_signal(SEMAPHORE *sem);
+	void semaphore_destroy(SEMAPHORE *sem);
+#endif
 
 
 /* Group: Semaphores */
@@ -557,12 +598,13 @@ int net_addr_from_str(NETADDR *addr, const char *string);
 
 	Parameters:
 		bindaddr - Address to bind the socket to.
+		use_random_port - use a random port
 
 	Returns:
 		On success it returns an handle to the socket. On failure it
 		returns NETSOCKET_INVALID.
 */
-NETSOCKET net_udp_create(NETADDR bindaddr);
+NETSOCKET net_udp_create(NETADDR bindaddr, int use_random_port);
 
 /*
 	Function: net_udp_send
@@ -1204,6 +1246,7 @@ unsigned str_quickhash(const char *str);
 */
 void gui_messagebox(const char *title, const char *message);
 
+const char *str_utf8_skip_whitespaces(const char *str);
 
 /*
 	Function: str_utf8_rewind
@@ -1282,6 +1325,61 @@ int str_utf8_encode(char *ptr, int chr);
 		- The string is treated as zero-terminated utf8 string.
 */
 int str_utf8_check(const char *str);
+
+/*
+	Function: uint32_from_be
+		Reads a 32-bit big-endian coded integer from 4 bytes of data.
+
+	Parameters:
+		bytes - Pointer to the bytes to interpret.
+
+	Returns:
+		The read integer.
+*/
+inline unsigned uint32_from_be(const void *bytes)
+{
+	const unsigned char *b = (const unsigned char *)bytes;
+	return (b[0]<<24)|(b[1]<<16)|(b[2]<<8)|b[3];
+}
+
+/*
+	Function: uint32_to_be
+		Writes a 32-bit integer into 4 bytes of data, coded as
+		big-endian.
+
+	Parameters:
+		bytes - The place to write the integer to.
+		integer - The integer to write.
+*/
+inline void uint32_to_be(void *bytes, unsigned integer)
+{
+	unsigned char *b = (unsigned char *)bytes;
+	b[0] = (integer&0xff000000)>>24;
+	b[1] = (integer&0x00ff0000)>>16;
+	b[2] = (integer&0x0000ff00)>>8;
+	b[3] = (integer&0x000000ff)>>0;
+}
+
+/*
+	Function: secure_random_init
+		Initializes the secure random module.
+		You *MUST* check the return value of this function.
+
+	Returns:
+		0 - Initialization succeeded.
+		1 - Initialization failed.
+*/
+int secure_random_init();
+
+/*
+	Function: secure_random_fill
+		Fills the buffer with the specified amount of random bytes.
+
+	Parameters:
+		bytes - Pointer to the start of the buffer.
+		length - Length of the buffer.
+*/
+void secure_random_fill(void *bytes, unsigned length);
 
 #ifdef __cplusplus
 }

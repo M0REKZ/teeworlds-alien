@@ -50,10 +50,10 @@ class CServerBan : public CNetBan
 public:
 	class CServer *Server() const { return m_pServer; }
 
-	void Init(class IConsole *pConsole, class IStorage *pStorage, class CServer* pServer);
+	void InitServerBan(class IConsole *pConsole, class IStorage *pStorage, class CServer* pServer);
 
-	int BanAddr(const NETADDR *pAddr, int Seconds, const char *pReason);
-	int BanRange(const CNetRange *pRange, int Seconds, const char *pReason);
+	virtual int BanAddr(const NETADDR *pAddr, int Seconds, const char *pReason);
+	virtual int BanRange(const CNetRange *pRange, int Seconds, const char *pReason);
 
 	static void ConBanExt(class IConsole::IResult *pResult, void *pUser);
 };
@@ -193,7 +193,7 @@ public:
 
 	void DoSnapshot();
 
-	static int NewClientCallback(int ClientID, void *pUser);
+	static int NewClientCallback(int ClientID, bool Legacy, void *pUser);
 	static int DelClientCallback(int ClientID, const char *pReason, void *pUser);
 
 	void SendMap(int ClientID);

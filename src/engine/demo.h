@@ -25,6 +25,12 @@ struct CDemoHeader
 	char m_aTimelineMarkers[MAX_TIMELINE_MARKERS][4];
 };
 
+struct CTimelineMarkers
+{
+	char m_aNumTimelineMarkers[4];
+	char m_aTimelineMarkers[MAX_TIMELINE_MARKERS][4];
+};
+
 class IDemoPlayer : public IInterface
 {
 	MACRO_INTERFACE("demoplayer", 0)

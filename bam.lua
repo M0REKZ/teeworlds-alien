@@ -1,4 +1,8 @@
-CheckVersion("0.4")
+if _VERSION == "Lua 5.1" then
+	CheckVersion("0.4")
+else
+	CheckVersion("0.5")
+end
 
 Import("configure.lua")
 Import("other/sdl/sdl.lua")
@@ -8,6 +12,8 @@ Import("other/freetype/freetype.lua")
 config = NewConfig()
 config:Add(OptCCompiler("compiler"))
 config:Add(OptTestCompileC("stackprotector", "int main(){return 0;}", "-fstack-protector -fstack-protector-all"))
+config:Add(OptTestCompileC("minmacosxsdk", "int main(){return 0;}", "-mmacosx-version-min=10.5 -isysroot /Developer/SDKs/MacOSX10.5.sdk"))
+config:Add(OptTestCompileC("macosxppc", "int main(){return 0;}", "-arch ppc"))
 config:Add(OptLibrary("zlib", "zlib.h", false))
 config:Add(SDL.OptFind("sdl", true))
 config:Add(FreeType.OptFind("freetype", true))
@@ -106,15 +112,20 @@ AddDependency(network_source, network_header)
 AddDependency(client_content_source, client_content_header)
 AddDependency(server_content_source, server_content_header)
 
-nethash = CHash("src/game/generated/nethash.cpp", "src/engine/shared/protocol.h", "src/game/generated/protocol.h", "src/game/tuning.h", "src/game/gamecore.cpp", network_header)
+nethash = CHash("src/game/generated/nethash.cpp", "src/engine/shared/protocol.h", "src/game/generated/protocol.h", "src/game/tuning.h", "src/game/gamecore.cpp")
 
 client_link_other = {}
 client_depends = {}
 server_link_other = {}
 
 if family == "windows" then
-	table.insert(client_depends, CopyToDirectory(".", "other\\freetype\\lib\\freetype.dll"))
-	table.insert(client_depends, CopyToDirectory(".", "other\\sdl\\vc2005libs\\SDL.dll"))
+	if platform == "win32" then
+		table.insert(client_depends, CopyToDirectory(".", "other\\freetype\\windows\\lib32\\freetype.dll"))
+		table.insert(client_depends, CopyToDirectory(".", "other\\sdl\\windows\\lib32\\SDL.dll"))
+	else
+		table.insert(client_depends, CopyToDirectory(".", "other\\freetype\\windows\\lib64\\freetype.dll"))
+		table.insert(client_depends, CopyToDirectory(".", "other\\sdl\\windows\\lib64\\SDL.dll"))
+	end
 
 	if config.compiler.driver == "cl" then
 		client_link_other = {ResCompile("other/icons/teeworlds_cl.rc")}
@@ -130,17 +141,27 @@ function Intermediate_Output(settings, input)
 end
 
 function build(settings)
+	-- apply compiler settings
+	config.compiler:Apply(settings)
+	
 	--settings.objdir = Path("objs")
 	settings.cc.Output = Intermediate_Output
 
 	if config.compiler.driver == "cl" then
-		settings.cc.flags:Add("/wd4244")
+		settings.cc.flags:Add("/wd4244", "/wd4577")
 	else
 		settings.cc.flags:Add("-Wall", "-fno-exceptions")
-		if platform == "macosx" then
-			settings.cc.flags:Add("-mmacosx-version-min=15.0", "-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.1.sdk")
-			settings.link.flags:Add("-mmacosx-version-min=15.0", "-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.1.sdk")
-		elseif config.stackprotector.value == 1 then
+		if family == "windows" then
+			-- disable visibility attribute support for gcc on windows
+			settings.cc.defines:Add("NO_VIZ")
+		elseif platform == "macosx" then
+			settings.cc.flags:Add("-mmacosx-version-min=15.0")
+			settings.link.flags:Add("-mmacosx-version-min=15.0")
+			if config.minmacosxsdk.value then
+				settings.cc.flags:Add("-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.1.sdk")
+				settings.link.flags:Add("-isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.1.sdk")
+			end
+		elseif config.stackprotector.value then
 			settings.cc.flags:Add("-fstack-protector", "-fstack-protector-all")
 			settings.link.flags:Add("-fstack-protector", "-fstack-protector-all")
 		end
@@ -148,6 +169,7 @@ function build(settings)
 
 	-- set some platform specific settings
 	settings.cc.includes:Add("src")
+	settings.cc.includes:Add("src/engine/external/wavpack")
 
 	if family == "unix" then
 		if platform == "macosx" then
@@ -156,16 +178,22 @@ function build(settings)
 		else
 			settings.link.libs:Add("pthread")
 		end
+		
+		if platform == "solaris" then
+		    settings.link.flags:Add("-lsocket")
+		    settings.link.flags:Add("-lnsl")
+		end
 	elseif family == "windows" then
 		settings.link.libs:Add("gdi32")
 		settings.link.libs:Add("user32")
 		settings.link.libs:Add("ws2_32")
 		settings.link.libs:Add("ole32")
 		settings.link.libs:Add("shell32")
+		settings.link.libs:Add("advapi32")
 	end
 
 	-- compile zlib if needed
-	if config.zlib.value == 1 then
+	if config.zlib.value then
 		settings.link.libs:Add("z")
 		if config.zlib.include_path then
 			settings.cc.includes:Add(config.zlib.include_path)
@@ -179,6 +207,7 @@ function build(settings)
 	-- build the small libraries
 	wavpack = Compile(settings, Collect("src/engine/external/wavpack/*.c"))
 	pnglite = Compile(settings, Collect("src/engine/external/pnglite/*.c"))
+	md5 = Compile(settings, Collect("src/engine/external/md5/*.c"))
 
 	-- build game components
 	engine_settings = settings:Copy()
@@ -224,26 +253,24 @@ function build(settings)
 	-- build tools (TODO: fix this so we don't get double _d_d stuff)
 	tools_src = Collect("src/tools/*.cpp", "src/tools/*.c")
 
-	client_osxlaunch = {}
 	server_osxlaunch = {}
 	if platform == "macosx" then
-		client_osxlaunch = Compile(client_settings, "src/osxlaunch/client.m")
 		server_osxlaunch = Compile(launcher_settings, "src/osxlaunch/server.m")
 	end
 
 	tools = {}
 	for i,v in ipairs(tools_src) do
 		toolname = PathFilename(PathBase(v))
-		tools[i] = Link(settings, toolname, Compile(settings, v), engine, zlib, pnglite)
+		tools[i] = Link(settings, toolname, Compile(settings, v), engine, md5, zlib, pnglite)
 	end
 
 	-- build client, server, version server and master server
 	client_exe = Link(client_settings, "teeworlds", game_shared, game_client,
-		engine, client, game_editor, zlib, pnglite, wavpack,
-		client_link_other, client_osxlaunch)
+		engine, client, game_editor, md5, zlib, pnglite, wavpack,
+		client_link_other)
 
 	server_exe = Link(server_settings, "teeworlds_srv", engine, server,
-		game_shared, game_server, zlib, server_link_other)
+		game_shared, game_server, md5, zlib, server_link_other)
 
 	serverlaunch = {}
 	if platform == "macosx" then
@@ -251,10 +278,10 @@ function build(settings)
 	end
 
 	versionserver_exe = Link(server_settings, "versionsrv", versionserver,
-		engine, zlib)
+		engine, md5, zlib)
 
 	masterserver_exe = Link(server_settings, "mastersrv", masterserver,
-		engine, zlib)
+		engine, md5, zlib)
 
 	-- make targets
 	c = PseudoTarget("client".."_"..settings.config_name, client_exe, client_depends)
@@ -284,7 +311,7 @@ release_settings.debug = 0
 release_settings.optimize = 1
 release_settings.cc.defines:Add("CONF_RELEASE")
 
-if platform == "macosx" and arch == "ia32" then
+if platform == "macosx" then
 	debug_settings_ppc = debug_settings:Copy()
 	debug_settings_ppc.config_name = "debug_ppc"
 	debug_settings_ppc.config_ext = "_ppc_d"
@@ -299,32 +326,89 @@ if platform == "macosx" and arch == "ia32" then
 	release_settings_ppc.link.flags:Add("-arch ppc")
 	release_settings_ppc.cc.defines:Add("CONF_RELEASE")
 
-	debug_settings_x86 = debug_settings:Copy()
-	debug_settings_x86.config_name = "debug_x86"
-	debug_settings_x86.config_ext = "_x86_d"
-	debug_settings_x86.cc.flags:Add("-arch i386")
-	debug_settings_x86.link.flags:Add("-arch i386")
-	debug_settings_x86.cc.defines:Add("CONF_DEBUG")
-
-	release_settings_x86 = release_settings:Copy()
-	release_settings_x86.config_name = "release_x86"
-	release_settings_x86.config_ext = "_x86"
-	release_settings_x86.cc.flags:Add("-arch i386")
-	release_settings_x86.link.flags:Add("-arch i386")
-	release_settings_x86.cc.defines:Add("CONF_RELEASE")
-
 	ppc_d = build(debug_settings_ppc)
-	x86_d = build(debug_settings_x86)
 	ppc_r = build(release_settings_ppc)
-	x86_r = build(release_settings_x86)
-	DefaultTarget("game_debug_x86")
-	PseudoTarget("release", ppc_r, x86_r)
-	PseudoTarget("debug", ppc_d, x86_d)
 
-	PseudoTarget("server_release", "server_release_x86", "server_release_ppc")
-	PseudoTarget("server_debug", "server_debug_x86", "server_debug_ppc")
-	PseudoTarget("client_release", "client_release_x86", "client_release_ppc")
-	PseudoTarget("client_debug", "client_debug_x86", "client_debug_ppc")
+	if arch == "ia32" or arch == "amd64" then
+		debug_settings_x86 = debug_settings:Copy()
+		debug_settings_x86.config_name = "debug_x86"
+		debug_settings_x86.config_ext = "_x86_d"
+		debug_settings_x86.cc.flags:Add("-arch i386")
+		debug_settings_x86.link.flags:Add("-arch i386")
+		debug_settings_x86.cc.defines:Add("CONF_DEBUG")
+
+		release_settings_x86 = release_settings:Copy()
+		release_settings_x86.config_name = "release_x86"
+		release_settings_x86.config_ext = "_x86"
+		release_settings_x86.cc.flags:Add("-arch i386")
+		release_settings_x86.link.flags:Add("-arch i386")
+		release_settings_x86.cc.defines:Add("CONF_RELEASE")
+	
+		x86_d = build(debug_settings_x86)
+		x86_r = build(release_settings_x86)
+	end
+
+	if arch == "amd64" then
+		debug_settings_x86_64 = debug_settings:Copy()
+		debug_settings_x86_64.config_name = "debug_x86_64"
+		debug_settings_x86_64.config_ext = "_x86_64_d"
+		debug_settings_x86_64.cc.flags:Add("-arch x86_64")
+		debug_settings_x86_64.link.flags:Add("-arch x86_64")
+		debug_settings_x86_64.cc.defines:Add("CONF_DEBUG")
+
+		release_settings_x86_64 = release_settings:Copy()
+		release_settings_x86_64.config_name = "release_x86_64"
+		release_settings_x86_64.config_ext = "_x86_64"
+		release_settings_x86_64.cc.flags:Add("-arch x86_64")
+		release_settings_x86_64.link.flags:Add("-arch x86_64")
+		release_settings_x86_64.cc.defines:Add("CONF_RELEASE")
+
+		x86_64_d = build(debug_settings_x86_64)
+		x86_64_r = build(release_settings_x86_64)
+	end
+
+	DefaultTarget("game_debug_x86")
+	
+	if config.macosxppc.value then
+		if arch == "ia32" then
+			PseudoTarget("release", ppc_r, x86_r)
+			PseudoTarget("debug", ppc_d, x86_d)
+			PseudoTarget("server_release", "server_release_ppc", "server_release_x86")
+			PseudoTarget("server_debug", "server_debug_ppc", "server_debug_x86")
+			PseudoTarget("client_release", "client_release_ppc", "client_release_x86")
+			PseudoTarget("client_debug", "client_debug_ppc", "client_debug_x86")
+		elseif arch == "amd64" then
+			PseudoTarget("release", ppc_r, x86_r, x86_64_r)
+			PseudoTarget("debug", ppc_d, x86_d, x86_64_d)
+			PseudoTarget("server_release", "server_release_ppc", "server_release_x86", "server_release_x86_64")
+			PseudoTarget("server_debug", "server_debug_ppc", "server_debug_x86", "server_debug_x86_64")
+			PseudoTarget("client_release", "client_release_ppc", "client_release_x86", "client_release_x86_64")
+			PseudoTarget("client_debug", "client_debug_ppc", "client_debug_x86", "client_debug_x86_64")
+		else
+			PseudoTarget("release", ppc_r)
+			PseudoTarget("debug", ppc_d)
+			PseudoTarget("server_release", "server_release_ppc")
+			PseudoTarget("server_debug", "server_debug_ppc")
+			PseudoTarget("client_release", "client_release_ppc")
+			PseudoTarget("client_debug", "client_debug_ppc")
+		end
+	else
+		if arch == "ia32" then
+			PseudoTarget("release", x86_r)
+			PseudoTarget("debug", x86_d)
+			PseudoTarget("server_release", "server_release_x86")
+			PseudoTarget("server_debug", "server_debug_x86")
+			PseudoTarget("client_release", "client_release_x86")
+			PseudoTarget("client_debug", "client_debug_x86")
+		elseif arch == "amd64" then
+			PseudoTarget("release", x86_r, x86_64_r)
+			PseudoTarget("debug", x86_d, x86_64_d)
+			PseudoTarget("server_release", "server_release_x86", "server_release_x86_64")
+			PseudoTarget("server_debug", "server_debug_x86", "server_debug_x86_64")
+			PseudoTarget("client_release", "client_release_x86", "client_release_x86_64")
+			PseudoTarget("client_debug", "client_debug_x86", "client_debug_x86_64")
+		end
+	end
 else
 	build(debug_settings)
 	build(release_settings)

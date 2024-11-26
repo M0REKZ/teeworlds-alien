@@ -657,13 +657,28 @@ no limit
 
 ##### needs translation #####
 
+Borderless window
+== 
+
 Demofile: %s
+== 
+
+Game paused
+== 
+
+Handle rendering async from updates
 == 
 
 Play background music
 == 
 
 Player country:
+== 
+
+Respawn
+== 
+
+Show only chat messages from friends
 == 
 
 Spectate next
@@ -673,6 +688,12 @@ Spectate previous
 == 
 
 Strict gametype filter
+== 
+
+Threaded rendering
+== 
+
+Threaded sound loading
 == 
 
 ##### old translations #####

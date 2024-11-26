@@ -82,3 +82,6 @@ void CDamageInd::OnRender()
 	s_LastLocalTime = Client()->LocalTime();
 	Graphics()->QuadsEnd();
 }
+
+
+

@@ -243,13 +243,12 @@ typename CNetBan::CBan<T> *CNetBan::CBanPool<T, HashCount>::Get(int Index) const
 template<class T>
 void CNetBan::MakeBanInfo(const CBan<T> *pBan, char *pBuf, unsigned BuffSize, int Type) const
 {
-	if(pBan == 0)
+	if(pBan == 0 || pBuf == 0)
 	{
 		if(BuffSize > 0)
 			pBuf[0] = 0;
 		return;
 	}
-
 	// build type based part
 	char aBuf[256];
 	if(Type == MSGTYPE_PLAYER)
@@ -407,7 +406,7 @@ int CNetBan::UnbanByRange(const CNetRange *pRange)
 {
 	if(pRange->IsValid())
 		return Unban(&m_BanRangePool, pRange);
-
+	
 	Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "net_ban", "ban failed (invalid range)");
 	return -1;
 }
@@ -468,7 +467,7 @@ bool CNetBan::IsBanned(const NETADDR *pAddr, char *pBuf, unsigned BufferSize) co
 			}
 		}
 	}
-
+	
 	return false;
 }
 
@@ -601,3 +600,7 @@ void CNetBan::ConBansSave(IConsole::IResult *pResult, void *pUser)
 	str_format(aBuf, sizeof(aBuf), "saved banlist to '%s'", pResult->GetString(0));
 	pThis->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "net_ban", aBuf);
 }
+
+// explicitly instantiate template for src/engine/server/server.cpp
+template void CNetBan::MakeBanInfo<CNetRange>(const CBan<CNetRange> *pBan, char *pBuf, unsigned BufferSize, int Type) const;
+template void CNetBan::MakeBanInfo<NETADDR>(const CBan<NETADDR> *pBan, char *pBuf, unsigned BufferSize, int Type) const;

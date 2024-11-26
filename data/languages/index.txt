@@ -1,4 +1,3 @@
-
 ##### language indices #####
 
 belarusian
@@ -16,6 +15,10 @@ brazilian_portuguese
 bulgarian
 == Български
 == 100
+
+chuvash
+== Чăвашла
+== 643
 
 czech
 == Česky
@@ -49,6 +52,10 @@ italian
 == Italiano
 == 380
 
+kyrgyz
+== Кыргызча
+== 417
+
 norwegian
 == Norsk
 == 578
@@ -67,6 +74,10 @@ romanian
 
 russian
 == Русский
+== 643
+
+sakha
+== Саха тыла
 == 643
 
 serbian

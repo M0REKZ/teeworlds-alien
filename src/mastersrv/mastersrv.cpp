@@ -117,7 +117,7 @@ void BuildPackets()
 			}
 			else
 			{
-				static char IPV4Mapping[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF };
+				static unsigned char IPV4Mapping[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF };
 
 				mem_copy(m_aPackets[m_NumPackets-1].m_Data.m_aServers[PacketIndex].m_aIp, IPV4Mapping, sizeof(IPV4Mapping));
 				m_aPackets[m_NumPackets-1].m_Data.m_aServers[PacketIndex].m_aIp[12] = pCurrent->m_Address.ip[0];
@@ -348,7 +348,11 @@ int main(int argc, const char **argv) // ignore_convention
 		m_pConsole->ParseArguments(argc-1, &argv[1]); // ignore_convention
 
 	if(g_Config.m_Bindaddr[0] && net_host_lookup(g_Config.m_Bindaddr, &BindAddr, NETTYPE_ALL) == 0)
+	{
+		// got bindaddr
+		BindAddr.type = NETTYPE_ALL;
 		BindAddr.port = MASTERSERVER_PORT;
+	}
 	else
 	{
 		mem_zero(&BindAddr, sizeof(BindAddr));
@@ -367,6 +371,9 @@ int main(int argc, const char **argv) // ignore_convention
 		dbg_msg("mastersrv", "couldn't start network (checker)");
 		return -1;
 	}
+
+	// process pending commands
+	m_pConsole->StoreCommands(false);
 
 	dbg_msg("mastersrv", "started");
 
